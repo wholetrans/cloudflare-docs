@@ -21,12 +21,15 @@ import rehypeHeadingSlugs from "./src/plugins/rehype/heading-slugs.ts";
 import rehypeShiftHeadings from "./src/plugins/rehype/shift-headings.ts";
 
 async function autogenSections() {
+	// BCP 47 language code regex
+	const langCodeRegex = /^[a-z]{2}(-[A-Z]{2})?$/;
+
 	const sections = (
 		await readdir("./src/content/docs/", {
 			withFileTypes: true,
 		})
 	)
-		.filter((x) => x.isDirectory())
+		.filter((x) => x.isDirectory() && !langCodeRegex.test(x.name))
 		.map((x) => x.name);
 	return sections.map((x) => {
 		return {
@@ -90,7 +93,21 @@ export default defineConfig({
 	},
 	integrations: [
 		starlight({
-			title: "Cloudflare Docs",
+			title: {
+				en: "Cloudflare Docs",
+				"zh-Hans": "Cloudflare 文档",
+			},
+			defaultLocale: "root",
+			locales: {
+				root: {
+					label: "English",
+					lang: "en",
+				},
+				"zh-hans": {
+					label: "简体中文",
+					lang: "zh-Hans",
+				},
+			},
 			logo: {
 				src: "./src/assets/logo.svg",
 			},
@@ -129,27 +146,27 @@ export default defineConfig({
 			plugins: [
 				...(runLinkCheck
 					? [
-							starlightLinksValidator({
-								errorOnInvalidHashes: false,
-								errorOnLocalLinks: false,
-								exclude: [
-									"/api/",
-									"/api/**",
-									"/changelog/**",
-									"/http/resources/**",
-									"{props.*}",
-									"/",
-									"/glossary/",
-									"/products/",
-									"/rules/snippets/examples/?operation=*",
-									"/rules/transform/examples/?operation=*",
-									"/ruleset-engine/rules-language/fields/reference/**",
-									"/workers/examples/?languages=*",
-									"/workers/examples/?tags=*",
-									"/workers-ai/models/**",
-								],
-							}),
-						]
+						starlightLinksValidator({
+							errorOnInvalidHashes: false,
+							errorOnLocalLinks: false,
+							exclude: [
+								"/api/",
+								"/api/**",
+								"/changelog/**",
+								"/http/resources/**",
+								"{props.*}",
+								"/",
+								"/glossary/",
+								"/products/",
+								"/rules/snippets/examples/?operation=*",
+								"/rules/transform/examples/?operation=*",
+								"/ruleset-engine/rules-language/fields/reference/**",
+								"/workers/examples/?languages=*",
+								"/workers/examples/?tags=*",
+								"/workers-ai/models/**",
+							],
+						}),
+					]
 					: []),
 				starlightDocSearch({
 					clientOptionsModule: "./src/plugins/docsearch/index.ts",

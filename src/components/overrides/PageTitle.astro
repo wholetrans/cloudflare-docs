@@ -21,6 +21,13 @@ const summary = frontmatter.summary;
 const component = frontmatter.styleGuide?.component;
 
 const slug = Astro.locals.starlightRoute.entry.slug;
+const locale = Astro.locals.starlightRoute.locale;
+
+let cleanSlug = slug;
+if (locale && slug.startsWith(locale + "/")) {
+	cleanSlug = slug.replace(locale + "/", "");
+}
+
 
 const breadcrumbProps: Record<string, any> = {
 	crumbs: [
@@ -33,7 +40,7 @@ const breadcrumbProps: Record<string, any> = {
 	id: "breadcrumbs",
 };
 
-const segments = slug.split("/");
+const segments = cleanSlug.split("/");
 
 for (let i = 0; i < segments.length; i++) {
 	if (i === 0) {

@@ -4,17 +4,36 @@ import Default from "@astrojs/starlight/components/Sidebar.astro";
 import { Icon as AstroIcon } from "astro-icon/components";
 import { lookupProductTitle } from "~/util/sidebar";
 
-const [product, module] = Astro.url.pathname.split("/").filter(Boolean);
+const { slug } = Astro.locals.starlightRoute;
+const segments = slug.split("/").filter(Boolean);
+
+// Known language codes
+const langCodes = ["zh-hans"];
+
+// Check if the first segment is a language code
+const isLocalized = segments.length > 0 && langCodes.includes(segments[0]);
+const currentLang = isLocalized ? segments[0] : null;
+
+// Extract the actual product name (skip language code if present)
+const product = isLocalized ? segments.at(1) : segments.at(0);
+const module = isLocalized ? segments.at(2) : segments.at(1);
+
+const isLangRoot = currentLang && !product;
 ---
 
-<a href={"/" + product + "/"} class="flex items-center gap-2 px-1 no-underline">
-	<AstroIcon name={product} size="32px" class="text-cl1-brand-orange" />
-	<span class="text-xl text-black">
-		<strong>
-			{lookupProductTitle(product, module)}
-		</strong>
-	</span>
-</a>
+{
+	!isLangRoot && product && (
+		<a
+			href={currentLang ? `/${currentLang}/${product}/` : `/${product}/`}
+			class="flex items-center gap-2 px-1 no-underline"
+		>
+			<AstroIcon name={product} size="32px" class="text-cl1-brand-orange" />
+			<span class="text-xl text-black">
+				<strong>{lookupProductTitle(product, module)}</strong>
+			</span>
+		</a>
+	)
+}
 
 <Default><slot /></Default>
 

@@ -1,4 +1,4 @@
-import { defineCollection } from "astro:content";
+import { defineCollection, z } from "astro:content";
 
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
@@ -47,7 +47,11 @@ export const collections = {
 	}),
 	i18n: defineCollection({
 		loader: i18nLoader(),
-		schema: i18nSchema(),
+		schema: i18nSchema({
+			extend: z.object({
+				"custom.login": z.string().optional(),
+			}),
+		}),
 	}),
 	changelog: defineCollection({
 		loader: contentLoader("changelog"),
@@ -86,7 +90,10 @@ export const collections = {
 		schema: learningPathsSchema,
 	}),
 	products: defineCollection({
-		loader: dataLoader("products"),
+		loader: glob({
+			pattern: "**/*.(json|yml|yaml)",
+			base: "./src/content/products",
+		}),
 	}),
 	"workers-ai-models": defineCollection({
 		loader: dataLoader("workers-ai-models"),

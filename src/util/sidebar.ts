@@ -20,19 +20,34 @@ const products = await getCollection("products");
 const sidebars = new Map<string, Group>();
 
 export async function getSidebar(context: AstroGlobal) {
+	const { starlightRoute } = context.locals;
 	const pathname = context.url.pathname;
-	const segments = pathname.split("/").filter(Boolean);
+	const segments = starlightRoute.slug.split("/").filter(Boolean);
 
-	const product = segments.at(0);
+	// Known language codes
+	const langCodes = ["zh-hans"];
+
+	// Check if the first segment is a language code
+	const isLocalized = segments.length > 0 && langCodes.includes(segments[0]);
+	const currentLang = isLocalized ? segments[0] : null;
+
+	// Extract the actual product name (skip language code if present)
+	const product = isLocalized ? segments.at(1) : segments.at(0);
 
 	if (!product) {
-		throw new Error(`[Sidebar] Splitting ${pathname} resulted in 0 segments`);
+		// This can happen on the language root page, e.g. /zh-hans/
+		return {
+			type: "group",
+			label: "Welcome",
+			entries: [],
+			collapsed: false,
+		};
 	}
 
 	let key: string;
 	let module: string | undefined;
 	if (product === "learning-paths") {
-		module = segments.at(1);
+		module = isLocalized ? segments.at(2) : segments.at(1);
 
 		if (!module) {
 			throw new Error(
@@ -58,10 +73,15 @@ export async function getSidebar(context: AstroGlobal) {
 				.at(0) as Group;
 		}
 
-		if (!group) {
-			throw new Error(
-				`[Sidebar] Couldn't find a group for ${product} ${module && `${module}`}`,
-			);
+		if (!group || group.entries.length === 0) {
+			// This can happen if a product page is visited in a locale where the product
+			// has no content. Instead of crashing, we can return an empty sidebar.
+			return {
+				type: "group",
+				label: product,
+				entries: [],
+				collapsed: false,
+			};
 		}
 
 		const intermediate = structuredClone(group);
@@ -71,6 +91,12 @@ export async function getSidebar(context: AstroGlobal) {
 	}
 
 	const sidebar = structuredClone(memoized);
+
+	// If this is a localized version, localize the sidebar links
+	if (currentLang) {
+		await localizeSidebarLinks(sidebar.entries, currentLang);
+	}
+
 	setSidebarCurrentEntry(sidebar.entries, pathname);
 
 	return sidebar;
@@ -180,6 +206,41 @@ export function flattenSidebar(sidebar: SidebarEntry[]): Link[] {
 	});
 }
 
+async function localizeSidebarLinks(entries: SidebarEntry[], lang: string): Promise<void> {
+	for (const entry of entries) {
+		if (entry.type === "group") {
+			await localizeSidebarLinks(entry.entries, lang);
+		} else if (entry.type === "link") {
+			// Skip external links
+			if (entry.attrs["data-external-link"]) {
+				continue;
+			}
+			const localizedHref = await getLocalizedHref(entry.href, lang);
+			if (localizedHref) {
+				entry.href = localizedHref;
+			}
+		}
+	}
+}
+
+async function getLocalizedHref(originalHref: string, lang: string): Promise<string | null> {
+	const cleanHref = originalHref.replace(/^\/|\/$/g, "");
+
+	const localizedPath = `${lang}/${cleanHref}`;
+
+	try {
+		const localizedEntry = await getEntry("docs", localizedPath);
+
+		if (localizedEntry) {
+			return `/${localizedPath}/`;
+		}
+	} catch (error) {
+		// Localized entry doesn't exist, keeping the original link.
+	}
+
+	return null;
+}
+
 async function handleGroup(group: Group): Promise<SidebarEntry> {
 	const index = group.entries.find(
 		(entry) => entry.type === "link" && entry.href.endsWith(`/${group.label}/`),
@@ -191,7 +252,19 @@ async function handleGroup(group: Group): Promise<SidebarEntry> {
 		);
 	}
 
-	const entry = await getEntry("docs", index.href.slice(1, -1));
+	let entry = await getEntry("docs", index.href.slice(1, -1));
+
+	if (!entry) {
+		const hrefPath = index.href.slice(1, -1);
+		const segments = hrefPath.split("/").filter(Boolean);
+		const langCodes = ["zh-hans"];
+
+		// Check if this is a localized path
+		if (segments.length > 0 && langCodes.includes(segments[0])) {
+			const englishPath = segments.slice(1).join("/");
+			entry = await getEntry("docs", englishPath);
+		}
+	}
 
 	if (!entry) {
 		throw new Error(
@@ -265,7 +338,19 @@ async function handleGroup(group: Group): Promise<SidebarEntry> {
 }
 
 async function handleLink(link: Link): Promise<Link> {
-	const entry = await getEntry("docs", link.href.slice(1, -1));
+	let entry = await getEntry("docs", link.href.slice(1, -1));
+
+	// If entry is not found and this might be a localized path, try the English version
+	if (!entry) {
+		const hrefPath = link.href.slice(1, -1);
+		const segments = hrefPath.split("/").filter(Boolean);
+		const langCodes = ["zh-hans"];
+
+		if (segments.length > 0 && langCodes.includes(segments[0])) {
+			const englishPath = segments.slice(1).join("/");
+			entry = await getEntry("docs", englishPath);
+		}
+	}
 
 	if (!entry) {
 		throw new Error(
@@ -293,9 +378,9 @@ async function handleLink(link: Link): Promise<Link> {
 			href: frontmatter.external_link,
 			badge: frontmatter.external_link.startsWith("/api")
 				? {
-						text: "API",
-						variant: "note",
-					}
+					text: "API",
+					variant: "note",
+				}
 				: undefined,
 			attrs: {
 				"data-external-link": true,
